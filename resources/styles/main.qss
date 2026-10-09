@@ -1,0 +1,76 @@
+/* JARVIS Main Stylesheet - Iron Man Theme */
+
+QMainWindow {
+    background-color: #1a1a2e;
+}
+
+QTextEdit, QListWidget {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    padding: 8px;
+}
+
+QLineEdit {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+QLineEdit:focus {
+    border-color: #e94560;
+}
+
+QPushButton {
+    background-color: #e94560;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+QPushButton:hover {
+    background-color: #c73652;
+}
+
+QPushButton:pressed {
+    background-color: #a32a41;
+}
+
+QPushButton:disabled {
+    background-color: #555555;
+    color: #888888;
+}
+
+QLabel {
+    color: #e0e0e0;
+    font-size: 12px;
+}
+
+QScrollBar:vertical {
+    background: #16213e;
+    width: 10px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background: #0f3460;
+    border-radius: 5px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #e94560;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}

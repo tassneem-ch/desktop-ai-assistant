@@ -1,0 +1,103 @@
+name: JARVIS CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: cmd
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Python Dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+
+    - name: Install Qt6
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.5.*'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2022_64'
+        modules: 'qtnetwork qtsql'
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+
+    - name: Build
+      run: |
+        cmake --build build --config Release
+
+    - name: Run C++ Tests
+      run: |
+        build\tests\CppTests\Release\TestJarvis.exe
+      continue-on-error: true
+
+    - name: Run Python Tests
+      run: |
+        pytest tests/PythonTests/ --cov=src/python -v
+      continue-on-error: true
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Jarvis-Windows-x64
+        path: build/Release/Jarvis.exe
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        pip install flake8 black
+
+    - name: Lint Python
+      run: |
+        flake8 src/python/ tests/PythonTests/ --max-line-length=100 --ignore=E402
+        black --check src/python/ tests/PythonTests/
+
+  package:
+    needs: build-windows
+    runs-on: windows-2022
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Build Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Jarvis-Windows-x64
+        path: dist
+
+    - name: Create Portable Package
+      run: |
+        powershell Compress-Archive -Path "dist\*" -DestinationPath "Jarvis-Portable.zip"
+
+    - name: Upload Release Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Jarvis-Portable
+        path: Jarvis-Portable.zip

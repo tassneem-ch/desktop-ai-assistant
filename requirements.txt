@@ -1,0 +1,27 @@
+# ---- Core ----
+requests
+urllib3
+ddgs
+
+# ---- Speech: TTS (edge-tts JARVIS voice) + STT (Google) ----
+edge-tts
+pyttsx3
+SpeechRecognition
+numpy
+sounddevice
+
+# ---- Desktop / tools ----
+Pillow
+qrcode[pil]
+psutil
+pyperclip
+pyautogui
+mss
+dnspython
+jsonpath-ng
+
+# ---- Windows only (skipped on Linux/macOS) ----
+pywin32; sys_platform == "win32"
+comtypes; sys_platform == "win32"
+pycaw; sys_platform == "win32"
+winotify; sys_platform == "win32"

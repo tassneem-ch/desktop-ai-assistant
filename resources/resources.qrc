@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/jarvis.svg</file>
+        <file>styles/main.qss</file>
+    </qresource>
+</RCC>
