@@ -1,9 +1,11 @@
 """JARVIS Voice-First UI - Waveform visualizer with text input"""
 
 import math
+import os
 import random
 import re
 import struct
+import sys
 import threading
 import tkinter as tk
 from jarvis_app.todo_overlay import show_todo_overlay, hide_todo_overlay, toggle_todo_overlay
@@ -752,6 +754,9 @@ class JarvisGUI:
             self._setup_voice_callbacks()
         self._anim_running = True
         self.root.after(200, lambda: self.play_sound("startup"))
+        if os.environ.get("JARVIS_OPEN_SETTINGS"):
+            # debug/automation hook: JARVIS_OPEN_SETTINGS=1 opens Settings at startup
+            self.root.after(900, self._open_settings)
         self._anim_loop()
 
     def play_sound(self, name):
@@ -1261,20 +1266,375 @@ class JarvisGUI:
                     pass
 
     def _open_settings(self):
+        import tkinter.ttk as ttk
+        C = self.colors
+        ai = getattr(self.orchestrator, "ai", None)
+
         win = tk.Toplevel(self.root)
-        win.title("Settings")
-        win.geometry("350x250")
-        win.configure(bg=self.colors["bg"])
-        tk.Label(win, text="JARVIS", font=("Segoe UI", 14, "bold"),
-                 fg=self.colors["accent"], bg=self.colors["bg"]).pack(pady=10)
-        tk.Label(win, text=f"Model: {self.orchestrator.ai.get_model() if hasattr(self.orchestrator, 'ai') else 'N/A'}",
-                 fg=self.colors["fg"], bg=self.colors["bg"]).pack()
-        tk.Label(win, text=f"Mode: {self.orchestrator.get_mode().upper()}",
-                 fg=self.colors["fg"], bg=self.colors["bg"]).pack()
-        tk.Label(win, text=f"Tools: {len(self.orchestrator.tools.list_tools()) if hasattr(self.orchestrator, 'tools') else 0}",
-                 fg=self.colors["fg"], bg=self.colors["bg"]).pack(pady=(0, 10))
-        tk.Button(win, text="Close", bg=self.colors["accent"],
-                  fg="white", command=win.destroy).pack(pady=10)
+        win.title("Settings — API & Model")
+        win.geometry("440x462")
+        win.resizable(False, False)
+        win.configure(bg=C["bg"])
+        win.transient(self.root)
+
+        tk.Label(win, text="⚙ J.A.R.V.I.S SETTINGS", font=("Consolas", 12, "bold"),
+                 fg=C["accent"], bg=C["bg"]).pack(pady=(12, 4))
+        status_lbl = tk.Label(win, text="", font=("Consolas", 8),
+                              fg=C["success"], bg=C["bg"])
+        status_lbl.pack()
+
+        def set_status(text, color=None):
+            status_lbl.configure(text=text, fg=color or C["success"])
+
+        # ── API key section ──
+        key_frame = tk.Frame(win, bg=C["accent2"], highlightbackground=C["border"],
+                             highlightthickness=1, bd=0)
+        key_frame.pack(fill=tk.X, padx=16, pady=(10, 4))
+
+        tk.Label(key_frame, text="PROVIDER API KEY", font=("Consolas", 9, "bold"),
+                 fg=C["status_color"], bg=C["accent2"]).pack(anchor="w", padx=10, pady=(8, 0))
+        tk.Label(key_frame,
+                 text="Paste an NVIDIA (nvapi-…) or OpenRouter (sk-or-…) key.\n"
+                      "Provider is detected automatically and saved for good.",
+                 font=("Consolas", 7), fg=C["fg"], bg=C["accent2"],
+                 justify="left").pack(anchor="w", padx=10)
+
+        key_row = tk.Frame(key_frame, bg=C["accent2"])
+        key_row.pack(fill=tk.X, padx=10, pady=(4, 4))
+        key_var = tk.StringVar(value="")
+        key_entry = tk.Entry(key_row, textvariable=key_var, show="•",
+                             font=("Consolas", 9), bg="#080820", fg=C["fg"],
+                             insertbackground=C["fg"], relief="solid", bd=1,
+                             highlightthickness=0)
+        key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+
+        show_var = tk.BooleanVar(value=False)
+
+        def toggle_show():
+            key_entry.configure(show="" if show_var.get() else "•")
+
+        tk.Checkbutton(key_row, text="show", variable=show_var, command=toggle_show,
+                       font=("Consolas", 7), fg=C["fg"], bg=C["accent2"],
+                       selectcolor="#080820", activebackground=C["accent2"],
+                       activeforeground=C["accent"]).pack(side=tk.LEFT)
+
+        prov_lbl = tk.Label(key_frame, text="provider: (auto-detect)",
+                            font=("Consolas", 8, "italic"), fg=C["fg"], bg=C["accent2"],
+                            anchor="w", justify="left")
+        prov_lbl.pack(anchor="w", fill=tk.X, padx=10, pady=(0, 8))
+
+        def on_key_typed(*_):
+            from jarvis_app.config import detect_provider
+            p = detect_provider(key_var.get())
+            if p:
+                prov_lbl.configure(text=f"provider: {p.upper()} ✓", fg=C["success"])
+            elif key_var.get().strip():
+                prov_lbl.configure(text="provider: unknown key format", fg="#ff8800")
+            else:
+                prov_lbl.configure(text="provider: (auto-detect)", fg=C["fg"])
+
+        key_var.trace("w", on_key_typed)
+
+        def save_key():
+            key = key_var.get().strip()
+            if not key or not ai:
+                return
+            prov = ai.set_api_key(key)
+            if prov:
+                refresh_models()  # may fire the model trace -> set status AFTER this
+                set_status(f"✓ key saved → {prov.upper()} (auto-saved)", C["success"])
+                key_entry.delete(0, tk.END)
+                on_key_typed()
+            else:
+                set_status("✗ unrecognized key — expected nvapi-… or sk-or-…", "#ff4444")
+
+        btn_row = tk.Frame(key_frame, bg=C["accent2"])
+        btn_row.pack(fill=tk.X, padx=10, pady=(0, 10))
+        tk.Button(btn_row, text="SAVE KEY", font=("Consolas", 8, "bold"),
+                  bg=C["accent"], fg="white", relief="flat", padx=10,
+                  command=save_key).pack(side=tk.LEFT)
+        tk.Button(btn_row, text="Remove saved key", font=("Consolas", 8),
+                  bg="#441111", fg="#ff8888", relief="flat", padx=10,
+                  command=lambda: (ai.clear_api_key() if ai else None,
+                                   set_status("saved key removed"),
+                                   refresh_models())).pack(side=tk.RIGHT)
+        key_entry.bind("<Return>", lambda e: save_key())
+
+        # ── Model section ──
+        tk.Label(win, text="MODEL", font=("Consolas", 9, "bold"),
+                 fg=C["status_color"], bg=C["bg"]).pack(anchor="w", padx=18, pady=(10, 0))
+        tk.Label(win, text="Pick a preset, or type any model id —\nit is saved automatically.",
+                 font=("Consolas", 7), fg=C["fg"], bg=C["bg"],
+                 justify="left").pack(anchor="w", padx=18)
+
+        model_row = tk.Frame(win, bg=C["bg"])
+        model_row.pack(fill=tk.X, padx=16, pady=4)
+        current = ai.get_model() if ai else ""
+        model_var = tk.StringVar(value=current)
+        model_box = ttk.Combobox(model_row, textvariable=model_var, font=("Consolas", 8),
+                                 state="normal")
+        model_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def refresh_models():
+            if not ai:
+                return
+            models = ai.list_models()
+            if current and current not in models:
+                models = [current] + models
+            model_box.configure(values=models)
+            model_var.set(ai.get_model())
+
+        def save_model(*_):
+            m = model_var.get().strip()
+            if m and ai:
+                ai.set_model(m)
+                set_status("✓ model saved (auto-saved)", C["success"])
+                # keep a typed model selectable on next open
+                try:
+                    vals = list(model_box.cget("values") or ())
+                    if m not in vals:
+                        model_box.configure(values=[m] + vals)
+                except Exception:
+                    pass
+                if hasattr(self, "model_display"):
+                    self.model_display.configure(text=f"MODEL: {m}")
+                if hasattr(self, "model_var"):
+                    try:
+                        self.model_var.set(m)
+                    except Exception:
+                        pass
+
+        model_var.trace("w", save_model)
+        refresh_models()
+
+        # ── live status ──
+        info_txt = ""
+        if ai:
+            info_txt = (f"provider: {ai.get_provider().upper()}   "
+                        f"custom key: {'yes' if ai.has_custom_key() else 'no (built-in)'}   "
+                        f"mode: {self.orchestrator.get_mode().upper()}   "
+                        f"tools: {len(self.orchestrator.tools.list_tools())}")
+        tk.Label(win, text=info_txt, font=("Consolas", 7), fg=C["fg"],
+                 bg=C["bg"], wraplength=410, justify="left").pack(anchor="w", padx=18, pady=(10, 0))
+
+        tk.Button(win, text="Close", bg=C["accent"], fg="white", relief="flat",
+                  command=win.destroy).pack(pady=14)
+
+        if os.environ.get("JARVIS_SETTINGS_SELFTEST"):
+            # automated dialog self-test (used by CI / manual verification)
+            self.root.after(700, lambda: self._settings_selftest(
+                win, key_var, save_key, model_var, prov_lbl, status_lbl, model_box))
+
+    def _settings_selftest(self, win, key_var, save_key, model_var,
+                           prov_lbl, status_lbl, model_box):
+        """Drive the Settings dialog end-to-end and report PASS/FAIL lines."""
+        from jarvis_app.config import load_config, save_config
+
+        ai = getattr(self.orchestrator, "ai", None)
+        orig = load_config()
+        results = []
+
+        # redirected Windows consoles default to cp1252; ✓/✗ need UTF-8
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+        def check(name, cond, extra=""):
+            results.append(bool(cond))
+            print(f"{'PASS' if cond else 'FAIL'}: {name} {extra}", flush=True)
+
+        try:
+            # 1. typing a key auto-detects the provider
+            key_var.set("nvapi-selftest-key")
+            check("provider auto-detect (nvapi-)",
+                  "NVIDIA" in prov_lbl.cget("text"), f"[{prov_lbl.cget('text')}]")
+
+            # 2. SAVE KEY switches provider and persists to disk
+            save_key()
+            check("save key -> provider nvidia", ai and ai.get_provider() == "nvidia")
+            check("key persisted to config.json",
+                  load_config().get("nvidia_api_key") == "nvapi-selftest-key")
+            check("status label shows saved",
+                  "saved" in status_lbl.cget("text"), f"[{status_lbl.cget('text')}]")
+            check("model list switched to NVIDIA presets",
+                  bool(model_box.cget("values")))
+
+            # 3. OpenRouter key is detected too
+            key_var.set("sk-or-v1-selftest")
+            check("provider auto-detect (sk-or-)",
+                  "OPENROUTER" in prov_lbl.cget("text"), f"[{prov_lbl.cget('text')}]")
+            save_key()
+            check("save key -> provider openrouter",
+                  ai and ai.get_provider() == "openrouter")
+
+            # 4. unknown keys are rejected, not persisted
+            key_var.set("not-a-real-key-123")
+            save_key()
+            check("unknown key rejected",
+                  load_config().get("openrouter_api_key") == "sk-or-v1-selftest",
+                  "(old key untouched)")
+
+            # 5. typing a custom model auto-saves
+            model_var.set("user/custom-test-model")
+            check("custom model auto-saved",
+                  load_config().get("model") == "user/custom-test-model")
+            vals = model_box.cget("values")
+            check("custom model added to dropdown",
+                  "user/custom-test-model" in (tuple(vals) if not isinstance(vals, str) else tuple(vals.split())))
+
+            # 6. full pipeline: real input widget -> orchestrator -> NVIDIA AI
+            #    -> tool call -> rendered response (restore the shipped config
+            #    first so we test reality, not the fake test key/model)
+            save_config(provider=orig.get("provider", ""),
+                        nvidia_api_key=orig.get("nvidia_api_key", ""),
+                        openrouter_api_key=orig.get("openrouter_api_key", ""),
+                        model=orig.get("model", ""))
+            if ai:
+                ai.provider = orig.get("provider", ai.provider)
+                ai.api_key = orig.get("nvidia_api_key", "") if ai.provider == "nvidia" \
+                    else orig.get("openrouter_api_key", "") or ai._default_key
+                ai.base_url = ai.PROVIDERS.get(ai.provider, ai.PROVIDERS["openrouter"])["base_url"]
+                ai.model = orig.get("model", ai.model)
+            pipeline = {"done": False}
+            _orig_tool = self.orchestrator._execute_tool
+
+            def _spy(action):
+                pipeline["done"] = True
+                pipeline["tool"] = action.get("tool")
+                return _orig_tool(action)
+
+            self.orchestrator._execute_tool = _spy
+            events = []
+            saved_cbs = {}
+            for _ev in ("response", "error", "tool_result"):
+                saved_cbs[_ev] = self.orchestrator._callbacks.get(_ev)
+                _prev = saved_cbs[_ev]
+
+                def _mk(ev, prev):
+                    def _cb(*a):
+                        events.append((ev, str(a[0])[:160]))
+                        if prev:
+                            prev(*a)
+                    return _cb
+
+                self.orchestrator.on(_ev, _mk(_ev, _prev))
+            self.input_field.delete("1.0", tk.END)
+            self.input_field.insert("1.0", "what is 2+2?")
+            self._send_message()
+            import time as _time
+            _deadline = _time.time() + 25
+            while not pipeline.get("done") and _time.time() < _deadline:
+                # pump the Tk loop: background threads marshal UI updates via
+                # root.after(), which blocks unless the main loop runs
+                try:
+                    self.root.update()
+                except Exception:
+                    pass
+                _time.sleep(0.05)
+            check("GUI -> AI -> tool pipeline", pipeline.get("done"),
+                  f"tool={pipeline.get('tool')} events={events}")
+            # restore the real app callbacks the spy events overwrote
+            self.orchestrator._execute_tool = _orig_tool
+            for _ev, _cb in saved_cbs.items():
+                if _cb:
+                    self.orchestrator.on(_ev, _cb)
+            check("AI used the NVIDIA key",
+                  ai.get_provider() == "nvidia" and ai.has_custom_key())
+        except Exception as e:
+            check("selftest completed without exception", False, f"error={e}")
+        finally:
+            # restore the real key/model so the app is unaffected
+            try:
+                save_config(provider=orig.get("provider", ""),
+                            nvidia_api_key=orig.get("nvidia_api_key", ""),
+                            openrouter_api_key=orig.get("openrouter_api_key", ""),
+                            model=orig.get("model", ""))
+                model_var.set(orig.get("model", ""))  # keep the dialog truthful
+                if ai:
+                    ai.provider = orig.get("provider", ai.provider)
+                    ai.api_key = orig.get("nvidia_api_key", "") if ai.provider == "nvidia" \
+                        else orig.get("openrouter_api_key", "") or ai._default_key
+                    ai.base_url = ai.PROVIDERS.get(ai.provider, ai.PROVIDERS["openrouter"])["base_url"]
+                    ai.model = orig.get("model", ai.model)
+            except Exception as e:
+                print("restore warn:", e, flush=True)
+
+        passed = sum(results)
+        print(f"SELFTEST {'PASSED' if passed == len(results) and results else 'FAILED'} "
+              f"({passed}/{len(results)})", flush=True)
+        print(f"STATE: model_var={model_var.get()!r} ai.model={getattr(ai, 'model', None)!r} "
+              f"config={load_config()}", flush=True)
+
+        # capture our own dialog image (PrintWindow works even when occluded)
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            # flush pending Tk repaints so the image shows the restored state
+            try:
+                win.update_idletasks()
+                self.root.update()
+            except Exception:
+                pass
+
+            user32 = ctypes.windll.user32
+            gdi32 = ctypes.windll.gdi32
+
+            hwnd = int(win.winfo_id())
+            hwnd = user32.GetParent(hwnd) or hwnd
+            rect = wintypes.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            w, h = rect.right - rect.left, rect.bottom - rect.top
+
+            hdc = user32.GetWindowDC(hwnd)
+            mdcdc = gdi32.CreateCompatibleDC(hdc)
+            bmp = gdi32.CreateCompatibleBitmap(hdc, w, h)
+            gdi32.SelectObject(mdcdc, bmp)
+            # 2 = PW_RENDERFULLCONTENT
+            ok = user32.PrintWindow(hwnd, mdcdc, 2) or user32.PrintWindow(hwnd, mdcdc, 0)
+
+            class BITMAPINFOHEADER(ctypes.Structure):
+                _fields_ = [
+                    ("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG),
+                    ("biHeight", wintypes.LONG), ("biPlanes", wintypes.WORD),
+                    ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                    ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG),
+                    ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD),
+                    ("biClrImportant", wintypes.DWORD),
+                ]
+
+            if ok:
+                bmi = BITMAPINFOHEADER()
+                bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+                bmi.biWidth = w
+                bmi.biHeight = -h  # top-down
+                bmi.biPlanes = 1
+                bmi.biBitCount = 32
+                buf = ctypes.create_string_buffer(w * h * 4)
+                gdi32.GetDIBits(mdcdc, bmp, 0, h, buf, ctypes.byref(bmi), 0)
+
+                from PIL import Image
+                img = Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1)
+                out = r"C:\Users\TASSNEEM\AppData\Local\Temp\opencode\settings_capture.png"
+                img.convert("RGB").save(out)
+                print(f"CAPTURED {w}x{h} -> {out}", flush=True)
+            else:
+                print("CAPTURE FAILED (PrintWindow returned 0)", flush=True)
+            gdi32.DeleteObject(bmp)
+            gdi32.DeleteDC(mdcdc)
+            user32.ReleaseDC(hwnd, hdc)
+        except Exception as e:
+            print("CAPTURE ERROR:", e, flush=True)
+
+        self.root.after(2500, lambda: self._safe_destroy(win))
+
+    @staticmethod
+    def _safe_destroy(win):
+        try:
+            win.destroy()
+        except Exception:
+            pass
 
     def _on_close(self):
         self._anim_running = False

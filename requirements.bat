@@ -29,7 +29,8 @@ echo ========================================
 echo  Installation complete!
 echo.
 echo  Run: python -m jarvis_app.main
-echo  (API key built-in — edit .env to use your own)
+echo  (API key built-in - File ^> Settings to add your own
+echo   NVIDIA nvapi-... or OpenRouter sk-or-... key, saved automatically)
 echo.
 echo  Voice settings (optional, in .env):
 echo    JARVIS_TTS=auto|edge|sapi   TTS engine (sapi = offline/instant)

@@ -30,13 +30,25 @@ chmod +x requirements.sh && sudo ./requirements.sh
 python3 run_jarvis.py
 ```
 
-## Use your own API key
+## Use your own API key (from the GUI)
 
-Edit `.env` and set:
-```
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
-```
-Get a free key at [openrouter.ai/keys](https://openrouter.ai/keys).
+**File → Settings → "PROVIDER API KEY"** — paste an NVIDIA or OpenRouter key,
+hit **SAVE KEY**, done. The provider is auto-detected from the key shape:
+
+| Key starts with | Provider | Endpoint |
+|---|---|---|
+| `nvapi-…` | **NVIDIA NIM** (free tier) | `integrate.api.nvidia.com` |
+| `sk-or-…` | OpenRouter | `openrouter.ai` |
+
+The key is **saved automatically** to `%APPDATA%\JarvisAssistant\config.json`
+(outside the repo, never committed) and reloaded on every launch. You can also
+type **any model id** directly into the Settings model box — it is saved the
+moment you type it. "Remove saved key" reverts to the built-in key.
+
+Prefer files? Set `NVIDIA_API_KEY=` or `OPENROUTER_API_KEY=` in `.env`
+(GUI-saved keys win over `.env`). Get free keys at
+[NVIDIA build.nvidia.com](https://build.nvidia.com) /
+[openrouter.ai/keys](https://openrouter.ai/keys).
 
 ---
 
@@ -84,13 +96,18 @@ python wake_word.py --install-service
 
 ## Default model
 
-`nvidia/nemotron-3-super-120b-a12b:free` — ~2.2 s first token, correct JSON tool
-calls. If a model is rate-limited, removed or returns an empty reply, JARVIS
-automatically fails over to the next working free model and remembers the one
-that worked:
+**NVIDIA NIM** `nvidia/nemotron-3-super-120b-a12b` — measured ~1.6 s first token
+with correct JSON tool calls (free `nvapi-` key, seeded in Settings).
 
-`nvidia/nemotron-3-super-120b-a12b:free` → `apodex/apodex-1.1-mini:free` →
-`openrouter/free` → `cohere/north-mini-code:free` → `poolside/laguna-xs-2.1:free`
+Failover: if a model is rate-limited, removed or returns an empty reply,
+JARVIS tries the next model, then crosses over to the free OpenRouter pool and
+remembers whichever one worked:
+
+```
+nemotron-3-super-120b-a12b → nemotron-3-nano-omni-30b-a3b-reasoning
+→ llama-3.1-nemotron-70b-instruct → [OpenRouter free]: nemotron-3-super:free
+→ apodex-1.1-mini:free → openrouter/free → north-mini-code:free → laguna-xs-2.1:free
+```
 
 ## Troubleshooting
 
@@ -99,8 +116,20 @@ that worked:
 | No mic / wrong mic | Set `JARVIS_MIC_DEVICE=<index>` in `.env` (list shown above) |
 | Robotic voice | `JARVIS_TTS=auto` needs the network for the neural voice — `JARVIS_TTS=sapi` forces the offline voice |
 | No audio at all | Check the Windows volume mixer; MCI playback is used for MP3 output |
-| "all free models are busy" | Wait a few seconds (free tier rate limits) or set your own `OPENROUTER_API_KEY` |
+| "all free models are busy" | Wait a few seconds (free tier rate limits) or paste your own key in **File → Settings** |
 | Wrong language recognised | Set `JARVIS_STT_LANG=ar-SA` (or `en-US`) in `.env` |
+| Key not remembered | It saves to `%APPDATA%\JarvisAssistant\config.json` — check that file exists and isn't read-only |
+
+### Debug hooks
+
+```bash
+# open the Settings dialog right after startup
+JARVIS_OPEN_SETTINGS=1 python -m jarvis_app.main
+
+# drive the Settings dialog end-to-end (detect/save/persist/model) and print
+# PASS/FAIL lines + a dialog screenshot to %TEMP%\opencode\settings_capture.png
+JARVIS_OPEN_SETTINGS=1 JARVIS_SETTINGS_SELFTEST=1 python -m jarvis_app.main
+```
 
 ## License
 

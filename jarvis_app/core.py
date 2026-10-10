@@ -215,8 +215,17 @@ class AgentOrchestrator:
                         raw = text[start:i+1]
                         try:
                             obj = json.loads(raw)
-                            if isinstance(obj, dict) and "tool" in obj and "params" in obj:
-                                return {"tool": str(obj["tool"]), "params": obj["params"]}
+                            if isinstance(obj, dict) and "tool" in obj:
+                                # tolerate args/arguments/input as synonyms for params
+                                params = obj.get("params")
+                                if params is None:
+                                    for alt in ("args", "arguments", "input"):
+                                        if isinstance(obj.get(alt), dict):
+                                            params = obj[alt]
+                                            break
+                                if params is None:
+                                    params = {}
+                                return {"tool": str(obj["tool"]), "params": params}
                         except json.JSONDecodeError:
                             pass
                         idx = i + 1

@@ -12,6 +12,7 @@ from jarvis_app.tools import create_default_registry
 from jarvis_app.core import AgentOrchestrator
 from jarvis_app.gui import JarvisGUI
 from jarvis_app.voice import VoiceEngine
+from jarvis_app.config import apply_to_env
 
 
 def load_env(path=".env"):
@@ -36,6 +37,7 @@ def load_env(path=".env"):
 class JarvisApp:
     def __init__(self):
         load_env()
+        apply_to_env()  # saved GUI keys/model override .env
 
         self.ai = AIEngine()
         self.memory = MemoryStore()
@@ -78,7 +80,7 @@ class JarvisApp:
             is_tool = False
             try:
                 obj = json.loads(response.strip())
-                if isinstance(obj, dict) and "tool" in obj and "params" in obj:
+                if isinstance(obj, dict) and "tool" in obj:
                     is_tool = True
             except (json.JSONDecodeError, ValueError, AttributeError):
                 pass
