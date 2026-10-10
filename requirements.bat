@@ -29,6 +29,7 @@ echo ========================================
 echo  Installation complete!
 echo.
 echo  Run: python -m jarvis_app.main
+echo  Run: python -m diva_app.main   (DIVA edition, feminine UI + female voice)
 echo  (API key built-in - File ^> Settings to add your own
 echo   NVIDIA nvapi-... or OpenRouter sk-or-... key, saved automatically)
 echo.

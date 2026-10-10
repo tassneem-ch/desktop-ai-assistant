@@ -94,6 +94,7 @@ class VoiceEngine:
         self._sapi_rate = 1
         self._edge_available = False
         self._edge_failures = 0
+        self._edge_retry_at = 0.0
         self._tts_engine = os.environ.get("JARVIS_TTS", "auto").strip().lower()
 
         # speech worker (single consumer => voices never overlap)
@@ -171,13 +172,27 @@ class VoiceEngine:
 
     @staticmethod
     def _select_sapi_voice(speaker):
-        """Prefer a natural English voice, fall back to whatever exists."""
+        """Prefer a natural English voice, fall back to whatever exists.
+
+        JARVIS_TTS_SAPI_GENDER=female|male biases the pick (used by DIVA so
+        the offline fallback stays a woman's voice). Default keeps JARVIS's
+        original david/zira preference.
+        """
         try:
+            gender = os.environ.get("JARVIS_TTS_SAPI_GENDER", "").strip().lower()
             voices = speaker.GetVoices()
             selected = None
+            if gender == "female":
+                female_hints = ("zira", "hazel", "susan", "sabina",
+                                "female", "aria", "jenny", "sonia")
+                male_hints = ("david", "mark", "male", "richard")
+            else:
+                female_hints = ("david", "zira", "natural")  # original order
+                male_hints = ()
             for i in range(voices.Count):
                 desc = voices.Item(i).GetDescription().lower()
-                if "david" in desc or "zira" in desc or "natural" in desc:
+                if any(h in desc for h in female_hints) and \
+                        not any(m in desc for m in male_hints):
                     selected = voices.Item(i)
                     break
             if selected is None and voices.Count > 0:
@@ -214,6 +229,15 @@ class VoiceEngine:
             return
         self._speech_queue.put(cleaned)
         self._start_speech_worker()
+
+    def set_edge_voice(self, name):
+        """Switch the edge-tts voice at runtime (e.g. from Settings)."""
+        name = (name or "").strip()
+        if name:
+            self._edge_voice = name
+
+    def get_edge_voice(self):
+        return self._edge_voice
 
     def speak_stream(self, chunk, is_final=False):
         """Speak streamed text as complete sentences (fast first audio)."""
@@ -289,12 +313,27 @@ class VoiceEngine:
 
         ok = False
         try:
+            # periodic re-probe after a transient edge outage (403 waves etc.)
+            if (not self._edge_available and self._tts_engine in ("auto", "edge")
+                    and self._edge_retry_at and time.time() >= self._edge_retry_at):
+                try:
+                    import edge_tts  # noqa: F401
+                    self._edge_available = True
+                    self._edge_failures = 0
+                    self._edge_retry_at = 0.0
+                    self._emit("tts_error", "edge-tts voice restored")
+                except Exception:
+                    pass
             if self._edge_available and self._tts_engine != "sapi":
                 ok = self._edge_speak(text)
                 if not ok:
                     self._edge_failures += 1
                     if self._edge_failures >= 3:
                         self._edge_available = False
+                        # transient outages (e.g. Microsoft 403 waves) resolve
+                        # on their own -> keep probing so the premium voice
+                        # returns automatically instead of never coming back
+                        self._edge_retry_at = time.time() + 300
                         self._emit("tts_error", "edge-tts unreachable, using offline voice")
                 else:
                     self._edge_failures = 0
@@ -381,7 +420,9 @@ class VoiceEngine:
         fpath = None
         try:
             communicate = edge_tts.Communicate(
-                text, self._edge_voice, rate="-5%", pitch="-5Hz",
+                text, self._edge_voice,
+                rate=os.environ.get("JARVIS_TTS_RATE", "-5%"),
+                pitch=os.environ.get("JARVIS_TTS_PITCH", "-5Hz"),
                 connector=self._tts_connector,
             )
             f = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)

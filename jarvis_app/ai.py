@@ -179,7 +179,10 @@ class AIEngine:
                         "stream": True,
                     }
 
-                    resp = self._session.post(url, headers=headers, json=payload, timeout=120, stream=True)
+                    # (connect, read) — a stalled stream breaks into the
+                    # failover chain quickly instead of blocking for minutes
+                    resp = self._session.post(url, headers=headers, json=payload,
+                                              timeout=(10, 60), stream=True)
 
                     if resp.status_code != 200:
                         # model missing, rate limited or unavailable -> try the next one

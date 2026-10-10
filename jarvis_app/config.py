@@ -9,7 +9,10 @@ import json
 import os
 import threading
 
-APP_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "JarvisAssistant")
+# JARVIS_APPDATA_DIR lets a sibling edition (e.g. diva_app) use its own
+# config/data directory; the default keeps JARVIS exactly as before.
+APP_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")),
+                       os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 
 _lock = threading.RLock()  # re-entrant: save_config calls load_config under the same lock

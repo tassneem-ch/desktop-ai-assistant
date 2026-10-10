@@ -304,7 +304,7 @@ class VisionTool(BaseTool):
 
 class NotesTool(BaseTool):
     def __init__(self):
-        self.notes_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "JarvisAssistant", "notes")
+        self.notes_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"), "notes")
         os.makedirs(self.notes_dir, exist_ok=True)
 
     def execute(self, params):
@@ -340,7 +340,7 @@ class NotesTool(BaseTool):
 
 class TodoTool(BaseTool):
     def __init__(self):
-        self.todo_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "JarvisAssistant", "todos.json")
+        self.todo_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"), "todos.json")
         os.makedirs(os.path.dirname(self.todo_file), exist_ok=True)
         if not os.path.exists(self.todo_file):
             with open(self.todo_file, "w") as f:
@@ -781,7 +781,7 @@ class EmailTool(BaseTool):
 
 class CalendarTool(BaseTool):
     def __init__(self):
-        self.events_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "JarvisAssistant", "calendar.json")
+        self.events_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"), "calendar.json")
         os.makedirs(os.path.dirname(self.events_file), exist_ok=True)
         if not os.path.exists(self.events_file):
             with open(self.events_file, "w") as f:
@@ -836,7 +836,7 @@ class CalendarTool(BaseTool):
 
 class ReminderTool(BaseTool):
     def __init__(self):
-        self.reminders_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "JarvisAssistant", "reminders.json")
+        self.reminders_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"), "reminders.json")
         os.makedirs(os.path.dirname(self.reminders_file), exist_ok=True)
         if not os.path.exists(self.reminders_file):
             with open(self.reminders_file, "w") as f:
@@ -2027,7 +2027,7 @@ class SkillTool(BaseTool):
 class TodoWriteTool(BaseTool):
     """Enhanced todo list management with task tracking (like opencode todowrite)"""
     def __init__(self):
-        self.todo_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "JarvisAssistant", "todos.json")
+        self.todo_file = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"), "todos.json")
         os.makedirs(os.path.dirname(self.todo_file), exist_ok=True)
         if not os.path.exists(self.todo_file):
             with open(self.todo_file, "w") as f:

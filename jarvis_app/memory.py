@@ -12,7 +12,7 @@ class MemoryStore:
     def __init__(self, db_path=None):
         if db_path is None:
             app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
-            db_dir = os.path.join(app_data, "JarvisAssistant")
+            db_dir = os.path.join(app_data, os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant"))
             os.makedirs(db_dir, exist_ok=True)
             db_path = os.path.join(db_dir, "memory.db")
 
@@ -79,7 +79,7 @@ class MemoryStore:
     def save_session(self, name=None):
         if name is None:
             name = f"session_{self.session_id}"
-        session_dir = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / "JarvisAssistant" / "sessions"
+        session_dir = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant") / "sessions"
         session_dir.mkdir(parents=True, exist_ok=True)
         path = session_dir / f"{name}.json"
         history = self.get_history(limit=999999)
@@ -90,7 +90,7 @@ class MemoryStore:
         return str(path)
 
     def load_session(self, name_or_path):
-        session_dir = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / "JarvisAssistant" / "sessions"
+        session_dir = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant") / "sessions"
         path = Path(name_or_path)
         if not path.exists():
             path = session_dir / f"{name_or_path}.json"
@@ -110,7 +110,7 @@ class MemoryStore:
         return True, f"Loaded session: {data.get('name', name_or_path)} ({len(data.get('history', []))} messages)"
 
     def list_sessions(self):
-        session_dir = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / "JarvisAssistant" / "sessions"
+        session_dir = Path(os.environ.get("APPDATA", os.path.expanduser("~"))) / os.environ.get("JARVIS_APPDATA_DIR", "JarvisAssistant") / "sessions"
         session_dir.mkdir(parents=True, exist_ok=True)
         sessions = []
         for f in sorted(session_dir.glob("*.json"), key=os.path.getmtime, reverse=True):

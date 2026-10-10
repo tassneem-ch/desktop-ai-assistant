@@ -35,6 +35,11 @@ def load_env(path=".env"):
 
 
 class JarvisApp:
+    # Subclasses (e.g. diva_app.main.DivaApp) swap these for their own
+    # orchestrator/GUI without re-wiring the callback plumbing.
+    ORCHESTRATOR_CLS = AgentOrchestrator
+    GUI_CLS = JarvisGUI
+
     def __init__(self):
         load_env()
         apply_to_env()  # saved GUI keys/model override .env
@@ -49,11 +54,11 @@ class JarvisApp:
 
         self.voice = VoiceEngine()
 
-        self.orchestrator = AgentOrchestrator(
+        self.orchestrator = self.ORCHESTRATOR_CLS(
             self.ai, self.tools, self.memory, self.governance
         )
 
-        self.gui = JarvisGUI(self.orchestrator, self.voice, self.voice.stop_speech)
+        self.gui = self.GUI_CLS(self.orchestrator, self.voice, self.voice.stop_speech)
         self._setup_callbacks()
 
     def _setup_callbacks(self):

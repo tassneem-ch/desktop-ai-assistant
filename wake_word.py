@@ -19,30 +19,38 @@ except ImportError:                       # running from another working dir
     from jarvis_app.voice import VoiceEngine
 
 
+DEFAULT_WAKE_WORDS = [
+    # Arabic - exact
+    "أفق", "أفق يا جارفيس", "يا جارفيس", "جارفيس",
+    "لفق", "لفق يا جارفيس", "يا جارفيس لفق",
+    # Arabic - phonetic (what Google STT actually hears)
+    "أفغ", "أفك", "أفوق", "أفاك", "أفواق", "افاق",
+    "أفاج", "أفج", "أفح", "أفخ", "آفاق", "أفاكس",
+    "لفغ", "لفك", "لفاك", "لفاج", "لفج", "لفخ",
+    "ل فق", "لأفق", "لفاغ", "لفوق", "لافق", "لافاك",
+    "يا جرفيس", "يا جار فيس", "يا جارافيس", "يا كرافيس",
+    "جار فيس", "جارافيس", "جارفيز", "جرفيس", "كرافيس",
+    # English
+    "hey jarvis", "jarvis", "ok jarvis", "hello jarvis",
+    "hey jarvus", "hey jarviz", "hey jahvis",
+    "jarvus", "jarviz", "j.arvis", "j arvis",
+    # Mixed
+    "أفق jarvis", "jarvis أقف", "jarvis أفق",
+    "هي jarvis", "هي جارفيس",
+]
+
+
 class WakeWordListener:
-    def __init__(self):
+    def __init__(self, wake_words=None, launch_script="run_jarvis.py",
+                 display_name="JARVIS"):
+        # wake_words/launch_script/display_name let another edition (e.g. DIVA)
+        # reuse this listener unchanged; defaults keep JARVIS behaviour identical.
         self._callbacks = {}
         self._listening = False
         self._thread = None
-        self._wake_words = [
-            # Arabic - exact
-            "أفق", "أفق يا جارفيس", "يا جارفيس", "جارفيس",
-            "لفق", "لفق يا جارفيس", "يا جارفيس لفق",
-            # Arabic - phonetic (what Google STT actually hears)
-            "أفغ", "أفك", "أفوق", "أفاك", "أفواق", "افاق",
-            "أفاج", "أفج", "أفح", "أفخ", "آفاق", "أفاكس",
-            "لفغ", "لفك", "لفاك", "لفاج", "لفج", "لفخ",
-            "ل فق", "لأفق", "لفاغ", "لفوق", "لافق", "لافاك",
-            "يا جرفيس", "يا جار فيس", "يا جارافيس", "يا كرافيس",
-            "جار فيس", "جارافيس", "جارفيز", "جرفيس", "كرافيس",
-            # English
-            "hey jarvis", "jarvis", "ok jarvis", "hello jarvis",
-            "hey jarvus", "hey jarviz", "hey jahvis",
-            "jarvus", "jarviz", "j.arvis", "j arvis",
-            # Mixed
-            "أفق jarvis", "jarvis أقف", "jarvis أفق",
-            "هي jarvis", "هي جارفيس",
-        ]
+        self._wake_words = [w.strip().lower() for w in (wake_words or DEFAULT_WAKE_WORDS) if w.strip()]
+        self._launch_script = launch_script
+        self._display_name = display_name
         self._last_trigger = 0
         self._cooldown = 3.0
         self._sample_rate = 16000
@@ -86,7 +94,8 @@ class WakeWordListener:
                 noise_rms = np.sqrt(np.mean(audio_np.astype(np.float64) ** 2))
                 recognizer.energy_threshold = max(noise_rms * 1.5, 80)
 
-            self._emit("listening", "Ready. Say 'hey jarvis'")
+            first_word = self._wake_words[0] if self._wake_words else "the wake word"
+            self._emit("listening", f"Ready. Say '{first_word}'")
 
             while self._listening:
                 try:
@@ -197,10 +206,10 @@ class WakeWordListener:
         return audio_np
 
     def _launch_jarvis(self):
-        """Launch the main JARVIS app"""
+        """Launch the main assistant app (JARVIS by default, DIVA if configured)"""
         try:
             script_dir = Path(__file__).parent
-            run_script = script_dir / "run_jarvis.py"
+            run_script = script_dir / self._launch_script
             
             if run_script.exists():
                 if sys.platform == "win32":
@@ -214,9 +223,9 @@ class WakeWordListener:
                         [sys.executable, str(run_script)],
                         cwd=str(script_dir)
                     )
-                self._emit("launched", "JARVIS started")
+                self._emit("launched", f"{self._display_name} started")
             else:
-                self._emit("error", "run_jarvis.py not found")
+                self._emit("error", f"{self._launch_script} not found")
         except Exception as e:
             self._emit("error", f"Launch failed: {e}")
     

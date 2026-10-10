@@ -170,6 +170,13 @@ class HudSounds:
                 buf = self._gen_beep(880, 60) + self._gen_beep(660, 60)[30:]
             else:
                 buf = self._gen_beep(660, 50)
+            self._play_buf(buf)
+        except Exception:
+            pass
+
+    def _play_buf(self, buf):
+        """Write a WAV buffer to a temp file and play it (async)."""
+        try:
             import tempfile, winsound
             f = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
             fpath = f.name
@@ -715,6 +722,21 @@ class WaveformVisualizer:
 
 
 class JarvisGUI:
+    # ── branding / theme seams ─────────────────────────────────────────
+    # Class attributes so an alternate edition (diva_app) can rebrand by
+    # subclassing instead of copying this whole module.
+    THEME = None                       # explicit theme dict; None -> THEMES[THEME_NAME]
+    THEME_NAME = "hud"
+    WINDOW_TITLE = "JARVIS"
+    TITLE_TEXT = "⚡ J.A.R.V.I.S"
+    AI_NAME = "JARVIS"
+    HELP_TITLE = "JARVIS Commands:"
+    FILE_DIALOG_TITLE = "Upload file to JARVIS"
+    SETTINGS_TITLE = "Settings — API & Model"
+    SETTINGS_HEADER = "⚙ J.A.R.V.I.S SETTINGS"
+    SETTINGS_GEOMETRY = "440x462"
+    SOUNDS_CLS = None                  # None -> HudSounds
+
     COMMANDS = {
         "/help": "Show commands",
         "/clear": "Clear conversation",
@@ -733,12 +755,12 @@ class JarvisGUI:
         self.orchestrator = orchestrator
         self.voice = voice_engine
         self._stop_speech = stop_speech_cb or (lambda: None)
-        self.colors = THEMES["hud"]
+        self.colors = self.THEME or THEMES.get(self.THEME_NAME, THEMES["hud"])
         self.listening = False
-        self.sounds = HudSounds(enabled=True)
+        self.sounds = (self.SOUNDS_CLS or HudSounds)(enabled=True)
 
         self.root = tk.Tk()
-        self.root.title("JARVIS")
+        self.root.title(self.WINDOW_TITLE)
         self.root.geometry("700x680")
         self.root.minsize(500, 500)
         self.root.configure(bg=self.colors["bg"])
@@ -762,6 +784,14 @@ class JarvisGUI:
     def play_sound(self, name):
         threading.Thread(target=lambda: self.sounds.play(name), daemon=True).start()
 
+    def _make_visualizer(self, canvas, w, h):
+        """Canvas visualizer factory — subclasses swap in their own avatar."""
+        return WaveformVisualizer(canvas, w, h)
+
+    def _settings_extra(self, win, set_status):
+        """Hook: subclasses add extra sections to the Settings dialog."""
+        return
+
     def _build_ui(self):
         C = self.colors
         main = tk.Frame(self.root, bg=C["bg"])
@@ -773,7 +803,7 @@ class JarvisGUI:
         top_bar.pack_propagate(False)
 
         # JARVIS title with scan effect
-        self.title_lbl = tk.Label(top_bar, text="⚡ J.A.R.V.I.S", font=("Consolas", 11, "bold"),
+        self.title_lbl = tk.Label(top_bar, text=self.TITLE_TEXT, font=("Consolas", 11, "bold"),
                                    fg=C["accent"], bg=C["bg"], anchor="w")
         self.title_lbl.pack(side=tk.LEFT, padx=(12, 0))
 
@@ -804,10 +834,10 @@ class JarvisGUI:
         self.model_var = tk.StringVar(value=current_model)
         self.model_var.trace("w", lambda *a: self._on_model_change(self.model_var.get()))
         self.model_dropdown = tk.OptionMenu(toolbar, self.model_var, *models)
-        self.model_dropdown.configure(bg="#080820", fg=C["fg"], activebackground=C["accent3"],
+        self.model_dropdown.configure(bg=C.get("field", "#080820"), fg=C["fg"], activebackground=C["accent3"],
                                        activeforeground=C["accent"], bd=0, font=("Consolas", 8),
                                        highlightthickness=0, padx=4, relief="flat")
-        self.model_dropdown["menu"].configure(bg="#080820", fg=C["fg"], activebackground=C["accent"])
+        self.model_dropdown["menu"].configure(bg=C.get("field", "#080820"), fg=C["fg"], activebackground=C["accent"])
         self.model_dropdown.pack(side=tk.LEFT, padx=(2, 6))
 
         # Separator
@@ -816,7 +846,7 @@ class JarvisGUI:
         # Plan mode toggle
         self.plan_mode = tk.BooleanVar(value=False)
         self.plan_btn = tk.Label(toolbar, text="[ BUILD ]", font=("Consolas", 8, "bold"),
-                                  bg="#002211", fg=C["success"], cursor="hand2", padx=6, pady=2)
+                                  bg=C.get("plan_bg", "#002211"), fg=C.get("plan_fg", C["success"]), cursor="hand2", padx=6, pady=2)
         self.plan_btn.pack(side=tk.LEFT, padx=(4, 6))
         self.plan_btn.bind("<Button-1>", lambda e: self._toggle_plan_mode())
 
@@ -829,7 +859,7 @@ class JarvisGUI:
         self.search_var = tk.StringVar()
         self.search_var.trace("w", lambda *a: self._on_search())
         self.search_entry = tk.Entry(toolbar, textvariable=self.search_var, font=("Consolas", 8),
-                                      bg="#080820", fg=C["fg"], insertbackground=C["accent"],
+                                      bg=C.get("field", "#080820"), fg=C["fg"], insertbackground=C["accent"],
                                       bd=0, highlightthickness=0, width=12, relief="flat")
         self.search_entry.pack(side=tk.LEFT, padx=(2, 4), fill=tk.X, expand=True)
         self.search_entry.insert(0, "search...")
@@ -897,12 +927,12 @@ class JarvisGUI:
         entry_frame.pack(fill=tk.X, pady=(0, 4))
 
         self.input_field = tk.Text(entry_frame, height=1, font=("Consolas", 11),
-                                   bg="#080820", fg=C["fg"], insertbackground=C["accent"],
+                                   bg=C.get("field", "#080820"), fg=C["fg"], insertbackground=C["accent"],
                                    bd=0, padx=10, pady=5, wrap=tk.WORD, relief="flat")
         self.input_field.pack(fill=tk.X, side=tk.LEFT, expand=True)
 
         self.send_btn = tk.Label(entry_frame, text="▶", font=("Consolas", 13),
-                                 fg=C["accent"], bg="#080820", cursor="hand2", padx=10)
+                                 fg=C["accent"], bg=C.get("field", "#080820"), cursor="hand2", padx=10)
         self.send_btn.pack(side=tk.RIGHT)
         self.send_btn.bind("<Button-1>", lambda e: self._send_message())
 
@@ -970,14 +1000,15 @@ class JarvisGUI:
         self._set_status(f"◆ MODEL: {model_name}", "#00ccff")
 
     def _toggle_plan_mode(self):
+        C = self.colors
         new_mode = not self.plan_mode.get()
         self.plan_mode.set(new_mode)
         if new_mode:
-            self.plan_btn.configure(text="[ PLAN ]", bg="#442200", fg="#ff8800")
+            self.plan_btn.configure(text="[ PLAN ]", bg=C.get("plan_active_bg", "#442200"), fg=C.get("plan_active_fg", "#ff8800"))
             self.orchestrator.set_mode("plan")
             self._set_status("◆ PLAN MODE", "#ff8800")
         else:
-            self.plan_btn.configure(text="[ BUILD ]", bg="#002211", fg="#00ff88")
+            self.plan_btn.configure(text="[ BUILD ]", bg=C.get("plan_bg", "#002211"), fg=C.get("plan_fg", "#00ff88"))
             self.orchestrator.set_mode("build")
             self._set_status("◆ BUILD MODE", "#00ff88")
 
@@ -1064,7 +1095,7 @@ class JarvisGUI:
 
     def _show_help(self):
         lines = [f"  {cmd:16s} {desc}" for cmd, desc in self.COMMANDS.items()]
-        text = "JARVIS Commands:\n" + "\n".join(lines)
+        text = f"{self.HELP_TITLE}\n" + "\n".join(lines)
         text += "\n\nShortcuts:\n"
         text += "  Tab            Toggle plan/build mode\n"
         text += "  Enter          Send message\n"
@@ -1120,7 +1151,7 @@ class JarvisGUI:
 
     def _upload_file(self):
         from tkinter import filedialog
-        path = filedialog.askopenfilename(title="Upload file to JARVIS")
+        path = filedialog.askopenfilename(title=self.FILE_DIALOG_TITLE)
         if not path:
             return
         self._set_status(f"Uploaded: {path.split('/')[-1]}", "#00ff88")
@@ -1187,8 +1218,16 @@ class JarvisGUI:
         if not listening and getattr(self.viz, "state", None) == "listening":
             self.viz.set_state("idle")
 
-    def after_safe(self, callback):
-        self.root.after(0, callback)
+    def after_safe(self, callback, _tries=0):
+        try:
+            self.root.after(0, callback)
+        except (RuntimeError, tk.TclError):
+            # Marshaling failed: the main thread is momentarily outside the Tk
+            # loop (startup/shutdown window, or a headless test harness that
+            # never enters mainloop). Retry shortly instead of losing the
+            # event or killing the emitting worker thread.
+            if _tries < 100:
+                threading.Timer(0.05, lambda: self.after_safe(callback, _tries + 1)).start()
 
     def _set_status(self, text, color=None):
         if hasattr(self, "status_label") and self.status_label.winfo_exists():
@@ -1218,7 +1257,7 @@ class JarvisGUI:
         """Add a labeled message to the log"""
         if hasattr(self, "response_text") and self.response_text.winfo_exists():
             tag = {"user": "user", "ai": "ai", "tool": "tool", "error": "error", "thinking": "thinking"}.get(sender, "ai")
-            label = {"user": "YOU", "ai": "JARVIS", "tool": "TOOL", "error": "ERROR", "thinking": "THINK"}.get(sender, "AI")
+            label = {"user": "YOU", "ai": self.AI_NAME, "tool": "TOOL", "error": "ERROR", "thinking": "THINK"}.get(sender, "AI")
             self.response_text.configure(state=tk.NORMAL)
             self.response_text.insert(tk.END, f"▸ {label} ", "bold")
             self.response_text.insert(tk.END, f"{text}\n", tag)
@@ -1239,7 +1278,7 @@ class JarvisGUI:
             h = self.canvas.winfo_height()
             if w > 10 and h > 10:
                 if not self.viz or self.viz.w != w or self.viz.h != h:
-                    self.viz = WaveformVisualizer(self.canvas, w, h)
+                    self.viz = self._make_visualizer(self.canvas, w, h)
 
                 # Determine amplitude source and manage speaking state
                 is_tts = getattr(self.voice, '_tts_active', False) if self.voice else False
@@ -1271,13 +1310,13 @@ class JarvisGUI:
         ai = getattr(self.orchestrator, "ai", None)
 
         win = tk.Toplevel(self.root)
-        win.title("Settings — API & Model")
-        win.geometry("440x462")
+        win.title(self.SETTINGS_TITLE)
+        win.geometry(self.SETTINGS_GEOMETRY)
         win.resizable(False, False)
         win.configure(bg=C["bg"])
         win.transient(self.root)
 
-        tk.Label(win, text="⚙ J.A.R.V.I.S SETTINGS", font=("Consolas", 12, "bold"),
+        tk.Label(win, text=self.SETTINGS_HEADER, font=("Consolas", 12, "bold"),
                  fg=C["accent"], bg=C["bg"]).pack(pady=(12, 4))
         status_lbl = tk.Label(win, text="", font=("Consolas", 8),
                               fg=C["success"], bg=C["bg"])
@@ -1303,7 +1342,7 @@ class JarvisGUI:
         key_row.pack(fill=tk.X, padx=10, pady=(4, 4))
         key_var = tk.StringVar(value="")
         key_entry = tk.Entry(key_row, textvariable=key_var, show="•",
-                             font=("Consolas", 9), bg="#080820", fg=C["fg"],
+                             font=("Consolas", 9), bg=C.get("field", "#080820"), fg=C["fg"],
                              insertbackground=C["fg"], relief="solid", bd=1,
                              highlightthickness=0)
         key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
@@ -1315,7 +1354,7 @@ class JarvisGUI:
 
         tk.Checkbutton(key_row, text="show", variable=show_var, command=toggle_show,
                        font=("Consolas", 7), fg=C["fg"], bg=C["accent2"],
-                       selectcolor="#080820", activebackground=C["accent2"],
+                       selectcolor=C.get("field", "#080820"), activebackground=C["accent2"],
                        activeforeground=C["accent"]).pack(side=tk.LEFT)
 
         prov_lbl = tk.Label(key_frame, text="provider: (auto-detect)",
@@ -1416,6 +1455,9 @@ class JarvisGUI:
                         f"tools: {len(self.orchestrator.tools.list_tools())}")
         tk.Label(win, text=info_txt, font=("Consolas", 7), fg=C["fg"],
                  bg=C["bg"], wraplength=410, justify="left").pack(anchor="w", padx=18, pady=(10, 0))
+
+        # subclass sections (e.g. DIVA personality/voice) go before Close
+        self._settings_extra(win, set_status)
 
         tk.Button(win, text="Close", bg=C["accent"], fg="white", relief="flat",
                   command=win.destroy).pack(pady=14)

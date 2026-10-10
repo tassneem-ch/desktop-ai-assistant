@@ -64,6 +64,32 @@ Prefer files? Set `NVIDIA_API_KEY=` or `OPENROUTER_API_KEY=` in `.env`
 > See [`TOOLS.md`](TOOLS.md) for a full reference — every tool with its parameters and a ~3-line description.
 - **Iron Man HUD** — Animated eye with radar sweep, targeting reticle, data readouts
 
+## 💜 DIVA — the feminine edition
+
+DIVA is a **second, independently runnable edition** of the same assistant: identical
+engines (AI, STT/TTS, 200 tools, security, memory) with her own identity, voice and UI.
+Both editions run from the same checkout and never touch each other's settings.
+
+```bash
+python -m diva_app.main     # or: python run_diva.py
+python wake_word.py         # JARVIS listener (unchanged)
+python -m diva_app.wake     # DIVA listener ("hey diva" / "ديفا" launches run_diva.py)
+```
+
+| | DIVA | JARVIS |
+|---|---|---|
+| **Voice** | `en-GB-SoniaNeural` (warm female), rate −3 %, pitch +0 Hz, female SAPI fallback | `en-GB-RyanNeural` (male) |
+| **Personality** | Witty diva persona, 3 intensities: **Soft Glam / Diva Mode (default) / Full Diva** | Standard JARVIS prompt |
+| **UI** | Midnight-plum theme, glowing lavender orb, rose/mint status, chime sounds | Cyan HUD, eye, beeps |
+| **Settings** | Extra sections: personality, voice + preview, name, wake words | API key + model |
+| **Data** | `%APPDATA%\DivaAssistant\` (AI key auto-seeded once from JARVIS) | `%APPDATA%\JarvisAssistant\` |
+| **Wake words** | `diva, hey diva, ok diva, hello diva, ديفا, …` | `jarvis, hey jarvis, أفق, …` |
+
+The persona lives in one auditable module (`diva_app/identity.py`): the style layer sits
+**above** the unchanged tool/security instructions, so personality can never override
+governance. All intensity levels keep the same honesty rules (never claim success that
+didn't happen; distinguish planned / attempted / completed). Full details: [`DIVA.md`](DIVA.md).
+
 ## 🎙️ Voice (STT + TTS)
 
 | | |
@@ -129,6 +155,10 @@ JARVIS_OPEN_SETTINGS=1 python -m jarvis_app.main
 # drive the Settings dialog end-to-end (detect/save/persist/model) and print
 # PASS/FAIL lines + a dialog screenshot to %TEMP%\opencode\settings_capture.png
 JARVIS_OPEN_SETTINGS=1 JARVIS_SETTINGS_SELFTEST=1 python -m jarvis_app.main
+
+# DIVA accepts the same hooks, plus branded aliases:
+#   DIVA_OPEN_SETTINGS=1 / DIVA_SETTINGS_SELFTEST=1 python -m diva_app.main
+# (adds personality/voice/name/wake-word checks on top of the 12 base ones)
 ```
 
 ## License
